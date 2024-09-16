@@ -1,0 +1,92 @@
+#include <xinu.h>
+
+#define UNGETMAX 10             /* Can un-get at most 10 characters. */
+static unsigned char ungetArray[UNGETMAX];
+unsigned int  bufp = 0;
+
+syscall kgetc() {
+	volatile struct ns16550_uart_csreg *regptr;
+	regptr = (struct ns16550_uart_csreg *)UART_BASE;
+
+	// TODO: First, check the unget buffer for a character.
+	//       Otherwise, check UART line status register, and
+	//       once there is data ready, get character c.
+	char c = 0;
+	if (bufp >= 0 && bufp < UNGETMAX) {
+        	c = ungetArray[bufp];
+        	bufp --;
+        	if (bufp < 0) {
+            		bufp = 0;
+        	}
+		return c;
+    	} 
+    	while ((regptr -> lsr & UART_LSR_DR) == 0) {
+	   
+    	}
+        c = regptr -> rbr;
+    	return c;
+}
+
+/**
+ * kcheckc - check to see if a character is available.
+ * @return true if a character is available, false otherwise.
+ */
+syscall kcheckc(void) {
+    	volatile struct ns16550_uart_csreg *regptr;
+    	regptr = (struct ns16550_uart_csreg *)UART_BASE;
+
+    	// TODO: Check the unget buffer and the UART for characters.
+   
+    	if (ungetArray[bufp] > 0) {
+    		return TRUE;
+    	}
+	else if ((regptr -> lsr & UART_LSR_DR) != 0) {
+		return TRUE;
+    	} else {
+		return FALSE;
+	}
+    
+  	return SYSERR;
+}	
+
+/**
+ * kungetc - put a serial character "back" into a local buffer.
+ * @param c character to unget.
+ * @return c on success, SYSERR on failure.
+ */
+syscall kungetc(unsigned char c)
+{
+    	// TODO: Check for room in unget buffer, put the character in or discard.
+    	if (bufp < UNGETMAX) {
+		ungetArray[bufp] = c;
+		bufp ++;
+		return c;
+	} else {
+		return SYSERR;
+	}
+}
+
+syscall kputc(uchar c) {
+    	volatile struct ns16550_uart_csreg *regptr;
+    	regptr = (struct ns16550_uart_csreg *)UART_BASE;
+
+    	// TODO: Check UART line status register.
+    	//       Once the Transmitter FIFO is empty, send character c.
+    	while ((regptr -> lsr & UART_LSR_THRE) == 0) {
+        	;
+    	}
+    	regptr -> thr = c;
+
+    	return c;
+}
+
+syscall kprintf(const char *format, ...)
+{
+    int retval;
+    va_list ap;
+
+    va_start(ap, format);
+    retval = _doprnt(format, ap, (int (*)(long, long))kputc, 0);
+    va_end(ap);
+    return retval;
+}
